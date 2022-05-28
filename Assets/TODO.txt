@@ -1,0 +1,2 @@
+- Grappling hook can currently grapple triggers. Add check tag functionality and only allow it to attatch to grapplable objects (not triggers!)
+- 
