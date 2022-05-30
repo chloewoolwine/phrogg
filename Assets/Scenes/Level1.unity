@@ -122273,8 +122273,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   player: {fileID: 0}
-  smoothTimeX: 0.1
-  smoothTimeY: 0.1
+  smoothTimeX: 0
+  smoothTimeY: 0
   xoffset: 0
   yoffset: 2
 --- !u!20 &519420031

@@ -14,15 +14,15 @@ public class Trampoline : MonoBehaviour
     {
         if(collision.collider.tag == "Player")
         {
-            Debug.Log("Collision");
             Rigidbody2D player = collision.collider.GetComponent<Rigidbody2D>();
             Vector2 force = new Vector2(0, bouncePower);
         //    player.transform.SetPositionAndRotation(center.position, Quaternion.identity);
+        //         ^^ last attempt at centering the player onto the trampoline
             player.AddForce(force, ForceMode2D.Impulse);
             if (animator.GetCurrentAnimatorStateInfo(0).IsName("idle2") || animator.GetCurrentAnimatorStateInfo(0).IsName("shoot"))
             {
                 animator.Play("squish");
-              }
+            }
             
         }
     }

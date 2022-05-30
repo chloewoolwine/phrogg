@@ -1,6 +1,6 @@
-- slurp up collectables
-- redo tongue swinging momentum on consecutive swings, it gets out of hand too quickly (maybe ?)
-- trampolines
-- moving platforms
-- speed boosties (like sonic)
+- overhead manager for different collectables?
+- redo tongue swinging momentum on consecutive swings, it gets out of hand too quickly===== its good for now!!! more adjusting maybe later
+- trampolines make move to center better?
+- moving platforms -- Mostly done! Maybe? could have more to do later but for now they seem done 
+- speed boosties (like sonic) - done
 - CREATURES?

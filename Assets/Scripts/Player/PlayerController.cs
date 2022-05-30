@@ -71,30 +71,35 @@ public class PlayerController : MonoBehaviour
         myspring.enabled = false;
     }
 
-    // ground = Physics2D.Raycast(new Vector2(transform.position.x, transform.position.y), -Vector2.up); 
-    // ^ for potentially different step sounds
+    private void Update()
+    {
+        if(alive && !paused)
+        {
+            UpdateJumpBehavior();
+            UpdateMouseBehavior();
+            if(myspring.enabled) UpdateHookBehavior();
+        }
+    }
 
-    void Update()
+    private void FixedUpdate()
     {
         if (alive && !paused)
         {
             if (mybody.velocity.x > 0.01f) mysprite.transform.localScale = new Vector3(.5f, transform.localScale.y, transform.localScale.z);
             else if (mybody.velocity.x < -0.01f) mysprite.transform.localScale = new Vector3(-.5f, transform.localScale.y, transform.localScale.z);
-           
-            UpdateJumpBehavior();
-            if (!myspring.enabled)
-                UpdateRunBehavior();
-            else
-                UpdateHookBehavior();
-            UpdateMouseBehavior();
-        }
 
+            if (!myspring.enabled)
+                FixedUpdateRunBehavior();
+            else
+                FixedUpdateHookBehavior();
+        }
     }
 
-    private void UpdateRunBehavior()
+    private void FixedUpdateRunBehavior()
     {
         float horizontal = Input.GetAxis("Horizontal");
         float inputspeed = (horizontal * baseMoveSpeed);
+        ground = Physics2D.Raycast(new Vector2(transform.position.x, transform.position.y), -Vector2.up);
         if (horizontal != 0)
         {
             if (mybody.velocity.x == 0) additionalMomentum = 0;
@@ -117,7 +122,9 @@ public class PlayerController : MonoBehaviour
         move.y = mybody.velocity.y;
         if (!grounded && (Math.Abs(mybody.velocity.x) > Math.Abs(move.x)))
             move.x = mybody.velocity.x;
+
         mybody.velocity = move;
+
     }
 
     private void UpdateJumpBehavior()
@@ -147,48 +154,40 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    private void UpdateHookBehavior()
+    public void UpdateHookBehavior()
     {
         if (!mytongue.enabled) myspring.enabled = false;
         else
         {
             mytongue.SetPosition(0, firePoint.position);
-            float vertical = Input.GetAxis("Vertical");
-            if (vertical != 0)
+            if (myspring.connectedBody != null)
             {
-                myspring.autoConfigureDistance = false;
-                myspring.distance += (vertical * -.1f / slurpspeed);
+                //   myspring.connectedAnchor = myspring.connectedBody.transform.position;
+                Vector2 point = myspring.connectedBody.GetComponentInParent<Transform>().position;
+                mytongue.SetPosition(1, myspring.connectedAnchor + point);
             }
-            else myspring.autoConfigureDistance = true;
-            if (myspring.distance > tongueLength) myspring.distance = tongueLength;
-        }
-    }
-
-    private void UpdateMouseBehavior()
-    {
-        if (Input.GetKeyDown(KeyCode.Mouse0) && !Input.GetKeyDown(KeyCode.Mouse1))
-        {
-            ShootHook();
-        }
-        if (Input.GetKeyDown(KeyCode.Mouse1))
-        {
-            StopHook();
         }
     }
 
     private bool isfirstswing;
-    //used exclusively for applying force to swinging
-    //TODO: add force buildup over time
-    private void FixedUpdate()
+    private void FixedUpdateHookBehavior()
     {
-        if (myspring.enabled)
+        if (!mytongue.enabled) myspring.enabled = false;
+        else
         {
+            float vertical = Input.GetAxis("Vertical");
+            if (vertical != 0)
+            {
+                myspring.distance += (vertical * -.1f / slurpspeed);
+            }
+            if (myspring.distance > tongueLength) myspring.distance = tongueLength;
+
             float input = Input.GetAxisRaw("Horizontal");
             Vector2 force = new Vector2(swingSpeed, 0) * input;
             if (isfirstswing)
             {
                 isfirstswing = false;
-                force += (additionalMomentum) * Vector2.right;
+                force += (additionalMomentum / 700) * Vector2.right;
             }
 
             mybody.AddForce(force, ForceMode2D.Impulse);
@@ -212,6 +211,19 @@ public class PlayerController : MonoBehaviour
             if (Math.Sign(input) != Math.Sign(additionalMomentum)) additionalMomentum = 0;
         }
     }
+    
+
+    private void UpdateMouseBehavior()
+    {
+        if (Input.GetKeyDown(KeyCode.Mouse0) && !Input.GetKeyDown(KeyCode.Mouse1))
+        {
+            ShootHook();
+        }
+        if (Input.GetKeyDown(KeyCode.Mouse1))
+        {
+            StopHook();
+        }
+    }
 
     private void ShootHook()
     {
@@ -221,21 +233,33 @@ public class PlayerController : MonoBehaviour
         RaycastHit2D hit = Physics2D.Raycast(firePoint.position, direction.normalized);
         if (hit)
         {
-            if (Vector2.Distance(hit.point, firePoint.position) <= tongueLength && hit.collider.tag == "Ground"
-                && !hit.collider.isTrigger)
+            if (Vector2.Distance(hit.point, firePoint.position) <= tongueLength)
             {
-                jumpCounter = maxJumps - 1;
-                tongueDirection = direction.normalized;
-                tongueTarget = hit.point;
-                if (tongueroutine != null) StopCoroutine(tongueroutine);
-                tongueroutine = StartCoroutine(StretchTongue(hit.point, firePoint.position));
+                if(hit.collider.tag == "Ground" && !hit.collider.isTrigger)
+                {
+                    jumpCounter = maxJumps - 1;
+                    tongueDirection = direction.normalized;
+                    tongueTarget = hit.point;
+                    hit.collider.TryGetComponent<MovingPlatform>(out MovingPlatform platform);
+                    if (tongueroutine != null) StopCoroutine(tongueroutine);
+                    tongueroutine = StartCoroutine(StretchTongue(hit.point, firePoint.position, platform));
+                } else if( hit.collider.tag == "Collectable")
+                {
+                    if (tongueroutine != null)
+                    {
+                        StopCoroutine(tongueroutine);
+                        if(currentCollectable != null)currentCollectable.Release();
+                    }
+                    tongueroutine = StartCoroutine(StretchTongueCollectable(hit.point, hit.transform.gameObject.GetComponent<Collectable>()));
+                }
             }
         }
     }
 
     private Coroutine tongueroutine;
-    //TODO add stretch tongue no hit to make an animation for when you dont hit 
-    IEnumerator StretchTongue(Vector2 destination, Vector2 origin)
+    private Collectable currentCollectable;
+    //TODO currently scales speed based on distance, maybe change this later 
+    IEnumerator StretchTongue(Vector2 destination, Vector2 origin, MovingPlatform platform)
     {
         float distance = Vector2.Distance(origin, destination);
         mytongue.enabled = true;
@@ -246,10 +270,16 @@ public class PlayerController : MonoBehaviour
             origin = firePoint.position; //reset origin
             mytongue.SetPosition(0, origin);
             mytongue.SetPosition(1, Vector2.Lerp(origin, destination, counter));
-            yield return null;
+            yield return new WaitForFixedUpdate();
         }
         mytongue.SetPosition(1, destination);
         myspring.connectedAnchor = destination;
+        if (platform != null)
+        {
+            myspring.connectedAnchor = platform.transform.InverseTransformPoint(destination);
+            myspring.connectedBody = platform.GetComponent<Rigidbody2D>();
+        }
+        myspring.distance = distance;
         myspring.enabled = true;
         isfirstswing = true;
 
@@ -260,12 +290,44 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public IEnumerator StretchTongueCollectable(Vector2 destination, Collectable collectable)
+    {
+        currentCollectable = collectable;
+        Vector2 origin = firePoint.position; //reset origin
+        float distance = Vector2.Distance(origin, destination);
+        mytongue.enabled = true;
+        float counter = 0;
+        while (counter < 1f)
+        {
+            counter += .1f / lineDrawSpeed;
+            origin = firePoint.position; //reset origin
+            mytongue.SetPosition(0, origin);
+            mytongue.SetPosition(1, Vector2.Lerp(origin, destination, counter));
+            yield return new WaitForFixedUpdate();
+        }
+        collectable.AttatchToTongue();
+        mytongue.SetPosition(1, destination);
+        while (counter > 0f)
+        {
+            counter -= .1f / lineDrawSpeed;
+            origin = firePoint.position; //reset origin
+            mytongue.SetPosition(0, origin);
+            Vector2 pos = Vector2.Lerp(origin, destination, counter);
+            mytongue.SetPosition(1, pos);
+            if(collectable != null)
+                collectable.transform.position = pos;
+            yield return new WaitForFixedUpdate();
+        }
+        mytongue.enabled = false;
+    }
+
     private void StopHook()
     {
         mytongue.enabled = false;
 
         if (myspring.enabled)
         {
+            myspring.connectedBody = null;
             myspring.enabled = false;
             additionalMomentum += mybody.velocity.x;
             Vector2 force = new Vector2(swingSpeed, 0) * mybody.velocity.x;
@@ -291,7 +353,7 @@ public class PlayerController : MonoBehaviour
         {
             if (transform.position.y - starty >= jumpHeight || mybody.velocity.y < 2)
                 mybody.gravityScale = gravityScale;
-            yield return null;
+            yield return new WaitForFixedUpdate();
         }
     }
 
@@ -342,8 +404,6 @@ public class PlayerController : MonoBehaviour
             alive = false;
             //TODO death animation
             mysprite.color = Color.red;
-            //TODO- FIX THE GODAMN CAMERA UGH
-            
             yield return new WaitForSeconds(.5f);
             //TODO fade to black (maybe not actually? it kinda looks nice where it flips back!
             GameManager.Instance.respawns.RespawnPlayer();
