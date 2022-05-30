@@ -22,9 +22,12 @@ public class CameraFollow : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        float x = Mathf.SmoothDamp(transform.position.x-xoffset, player.transform.position.x, ref velocity.x, smoothTimeX);
-        float y = Mathf.SmoothDamp(transform.position.y-yoffset, player.transform.position.y, ref velocity.y, smoothTimeY);
+        if (player.alive)
+        {
+            float x = Mathf.SmoothDamp(transform.position.x - xoffset, player.transform.position.x, ref velocity.x, smoothTimeX);
+            float y = Mathf.SmoothDamp(transform.position.y - yoffset, player.transform.position.y, ref velocity.y, smoothTimeY);
 
-        transform.position = new Vector3(x + xoffset, y + yoffset, -10);
+            transform.position = new Vector3(x + xoffset, y + yoffset, -10);
+        }
     }
 }

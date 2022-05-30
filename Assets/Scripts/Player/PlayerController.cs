@@ -30,6 +30,8 @@ public class PlayerController : MonoBehaviour
     [Header("Speed")]
     public float maxSpeed = 7; //Max move speed
     public int baseMoveSpeed = 10;
+    public float accelerationFactor = .01f;
+    public float deccelerationFactor = .01f;
     [ReadOnly] public float currentSpeed;
     [ReadOnly] public float additionalMomentum;
 
@@ -69,125 +71,145 @@ public class PlayerController : MonoBehaviour
         myspring.enabled = false;
     }
 
+    // ground = Physics2D.Raycast(new Vector2(transform.position.x, transform.position.y), -Vector2.up); 
+    // ^ for potentially different step sounds
 
     void Update()
     {
-        Vector2 move = Vector2.zero;
-        ground = Physics2D.Raycast(new Vector2(transform.position.x, transform.position.y), -Vector2.up);
         if (alive && !paused)
         {
-            if (mybody.velocity.x > 0.01f)
-            {
-                mysprite.transform.localScale = new Vector3(.5f, transform.localScale.y, transform.localScale.z);
-            }
-            else if (mybody.velocity.x < -0.01f)
-            {
-                mysprite.transform.localScale = new Vector3(-.5f, transform.localScale.y, transform.localScale.z);
-            }
-
-            if (Input.GetButtonDown("Jump"))
-            {
-                if ((grounded) || (!grounded && jumpCounter < maxJumps))
-                {
-                    mybody.gravityScale = 0;
-                    jumpCounter++;
-                    Jump();
-                }
-            }
-            if (Input.GetButtonUp("Jump"))
-            {
-                mybody.gravityScale = gravityScale;
-            }
-
-            if (grounded)
-            {
-                if (additionalMomentum > 0) additionalMomentum = additionalMomentum - .1f;
-                if (additionalMomentum < 0) additionalMomentum = additionalMomentum + .1f;
-            }
-
-            /*
-            if (Input.GetButtonDown("Cancel"))
-            {
-                pauseMenu.SetActive(true);
-                //store momentum and crap
-            }
-             */
-            if (myspring.enabled == false)
-            {
-                float inputspeed = (Input.GetAxis("Horizontal") * baseMoveSpeed);
-                if (Math.Sign(inputspeed) != Math.Sign(additionalMomentum) && inputspeed != 0) additionalMomentum = 0; //cancel all momentum on turn
-                move.x = inputspeed + (additionalMomentum / 10);
-                currentSpeed = mybody.velocity.x;
-
-                move.y = mybody.velocity.y;
-                if (!grounded && (Math.Abs(mybody.velocity.x) > Math.Abs(move.x)))
-                    move.x = mybody.velocity.x;
-                mybody.velocity = move;
-            }
-
-            if (Input.GetKeyDown(KeyCode.Mouse0) && !Input.GetKeyDown(KeyCode.Mouse1))
-            {
-                ShootHook();
-            }
-            if (Input.GetKeyDown(KeyCode.Mouse1))
-            {
-                StopHook();
-            }
-
-            if (myspring.enabled)
-            {
-                if (!mytongue.enabled) myspring.enabled = false;
-                else
-                {
-                    mytongue.SetPosition(0, firePoint.position);
-                    float vertical = Input.GetAxis("Vertical");
-                    if (vertical != 0)
-                    {
-                        myspring.autoConfigureDistance = false;
-                        myspring.distance += (vertical * -.1f / slurpspeed);
-                        if (myspring.distance > tongueLength) myspring.distance = tongueLength;
-                    }
-                    else myspring.autoConfigureDistance = true;
-
-                }
-            }
+            if (mybody.velocity.x > 0.01f) mysprite.transform.localScale = new Vector3(.5f, transform.localScale.y, transform.localScale.z);
+            else if (mybody.velocity.x < -0.01f) mysprite.transform.localScale = new Vector3(-.5f, transform.localScale.y, transform.localScale.z);
+           
+            UpdateJumpBehavior();
+            if (!myspring.enabled)
+                UpdateRunBehavior();
+            else
+                UpdateHookBehavior();
+            UpdateMouseBehavior();
         }
 
     }
-    private bool isfirstswing;
 
+    private void UpdateRunBehavior()
+    {
+        float horizontal = Input.GetAxis("Horizontal");
+        float inputspeed = (horizontal * baseMoveSpeed);
+        if (horizontal != 0)
+        {
+            if (mybody.velocity.x == 0) additionalMomentum = 0;
+            if (Math.Abs(additionalMomentum) < maxSpeed)
+            {
+                if (!grounded)
+                    Accelerate();
+                Accelerate();
+            }
+            if (Math.Sign(inputspeed) != Math.Sign(additionalMomentum)) additionalMomentum = 0; //cancel all momentum on turn
+        }
+        else
+        {
+            Deccelerate();
+        }
+        Vector2 move = Vector2.zero;
+        move.x = inputspeed + (additionalMomentum / 10);
+        currentSpeed = mybody.velocity.x;
+
+        move.y = mybody.velocity.y;
+        if (!grounded && (Math.Abs(mybody.velocity.x) > Math.Abs(move.x)))
+            move.x = mybody.velocity.x;
+        mybody.velocity = move;
+    }
+
+    private void UpdateJumpBehavior()
+    {
+        bool jumpstart = Input.GetButtonDown("Jump");
+        bool jumpend = Input.GetButtonUp("Jump");
+        bool jumpheld = Input.GetButton("Jump");
+
+        if (jumpheld && !jumpstart && !jumpend)
+        {
+            if (grounded)
+            {
+                jumpCounter = 0;
+                Jump();
+            }
+        }
+        if (jumpstart)
+        {
+            if ((grounded) || (!grounded && jumpCounter < maxJumps))
+            {
+                Jump();
+            }
+        }
+        if (jumpend)
+        {
+            mybody.gravityScale = gravityScale;
+        }
+    }
+
+    private void UpdateHookBehavior()
+    {
+        if (!mytongue.enabled) myspring.enabled = false;
+        else
+        {
+            mytongue.SetPosition(0, firePoint.position);
+            float vertical = Input.GetAxis("Vertical");
+            if (vertical != 0)
+            {
+                myspring.autoConfigureDistance = false;
+                myspring.distance += (vertical * -.1f / slurpspeed);
+            }
+            else myspring.autoConfigureDistance = true;
+            if (myspring.distance > tongueLength) myspring.distance = tongueLength;
+        }
+    }
+
+    private void UpdateMouseBehavior()
+    {
+        if (Input.GetKeyDown(KeyCode.Mouse0) && !Input.GetKeyDown(KeyCode.Mouse1))
+        {
+            ShootHook();
+        }
+        if (Input.GetKeyDown(KeyCode.Mouse1))
+        {
+            StopHook();
+        }
+    }
+
+    private bool isfirstswing;
     //used exclusively for applying force to swinging
     //TODO: add force buildup over time
     private void FixedUpdate()
     {
         if (myspring.enabled)
         {
-
-            Vector2 force = new Vector2(swingSpeed, 0) * Input.GetAxisRaw("Horizontal");
+            float input = Input.GetAxisRaw("Horizontal");
+            Vector2 force = new Vector2(swingSpeed, 0) * input;
             if (isfirstswing)
             {
                 isfirstswing = false;
-                force += (additionalMomentum) * Input.GetAxisRaw("Horizontal") * Vector2.right;
+                force += (additionalMomentum) * Vector2.right;
             }
 
             mybody.AddForce(force, ForceMode2D.Impulse);
 
-
-            var clockwise = Input.GetKeyDown(KeyCode.D);
-            var anticlockwise = Input.GetKeyDown(KeyCode.A);
             var constraint = (tongueTarget - mybody.position).normalized;
 
-            if (clockwise)
+            if (input > 0)
             {
                 var f = new Vector2(-constraint.y, constraint.x) * TangentForce;
                 mybody.AddForce(force, ForceMode2D.Impulse);
             }
-
-            if (anticlockwise)
+            else if (input < 0)
             {
                 var f = new Vector2(constraint.y, -constraint.x) * TangentForce;
                 mybody.AddForce(force, ForceMode2D.Impulse);
             }
+            else
+            {
+                Deccelerate();
+            }
+            if (Math.Sign(input) != Math.Sign(additionalMomentum)) additionalMomentum = 0;
         }
     }
 
@@ -202,12 +224,11 @@ public class PlayerController : MonoBehaviour
             if (Vector2.Distance(hit.point, firePoint.position) <= tongueLength && hit.collider.tag == "Ground"
                 && !hit.collider.isTrigger)
             {
-                jumpCounter = maxJumps-1;
+                jumpCounter = maxJumps - 1;
                 tongueDirection = direction.normalized;
                 tongueTarget = hit.point;
                 if (tongueroutine != null) StopCoroutine(tongueroutine);
                 tongueroutine = StartCoroutine(StretchTongue(hit.point, firePoint.position));
-                //start courtine for animation?
             }
         }
     }
@@ -224,9 +245,6 @@ public class PlayerController : MonoBehaviour
             counter += .1f / lineDrawSpeed;
             origin = firePoint.position; //reset origin
             mytongue.SetPosition(0, origin);
-
-            //         float lengthpercent = Mathf.Lerp(0, distance, counter);
-            //         Vector2 point = lengthpercent * tongueDirection + origin;
             mytongue.SetPosition(1, Vector2.Lerp(origin, destination, counter));
             yield return null;
         }
@@ -234,12 +252,16 @@ public class PlayerController : MonoBehaviour
         myspring.connectedAnchor = destination;
         myspring.enabled = true;
         isfirstswing = true;
+
+        if (additionalMomentum > (maxSpeed * .7f))
+        {
+            myspring.autoConfigureDistance = false;
+            myspring.distance = myspring.distance - 1f;
+        }
     }
 
     private void StopHook()
     {
-        //todo add animation for slurping tongue back up
-        Debug.Log("Yeet");
         mytongue.enabled = false;
 
         if (myspring.enabled)
@@ -253,8 +275,11 @@ public class PlayerController : MonoBehaviour
 
     private Coroutine jumproutine;
 
+
     private void Jump()
     {
+        jumpCounter++;
+        mybody.gravityScale = 0;
         mybody.velocity = new Vector2(mybody.velocity.x, jumpPower * jumpMultiplier);
         if (jumproutine != null) StopCoroutine(jumproutine);
         jumproutine = StartCoroutine(DetermineGravity(transform.position.y));
@@ -264,12 +289,22 @@ public class PlayerController : MonoBehaviour
     {
         while (mybody.gravityScale == 0)
         {
-            if (mybody.velocity.x > 0) additionalMomentum += .1f;
-            if (mybody.velocity.x < 0) additionalMomentum -= .1f;
             if (transform.position.y - starty >= jumpHeight || mybody.velocity.y < 2)
                 mybody.gravityScale = gravityScale;
             yield return null;
         }
+    }
+
+    private void Accelerate()
+    {
+        if (mybody.velocity.x > 0) additionalMomentum += accelerationFactor;
+        if (mybody.velocity.x < 0) additionalMomentum -= accelerationFactor;
+    }
+
+    private void Deccelerate()
+    {
+        if (additionalMomentum > 0) additionalMomentum = additionalMomentum - deccelerationFactor;
+        if (additionalMomentum < 0) additionalMomentum = additionalMomentum + deccelerationFactor;
     }
 
     // called when the cube hits the floor
@@ -308,17 +343,11 @@ public class PlayerController : MonoBehaviour
             //TODO death animation
             mysprite.color = Color.red;
             //TODO- FIX THE GODAMN CAMERA UGH
-
-            //    float x = maincamera.transform.position.x;
-            //   float y = maincamera.transform.position.y;
-            //    maincamera.transform.SetParent(null);
+            
             yield return new WaitForSeconds(.5f);
-            //TODO fade to black
+            //TODO fade to black (maybe not actually? it kinda looks nice where it flips back!
             GameManager.Instance.respawns.RespawnPlayer();
             mysprite.color = Color.white;
-            //    maincamera.transform.SetParent(transform);
-            //    maincamera.transform.position.Set(x, y, -10);
-            //    Debug.Log("x: " + x + " y: " + y);
         }
 
         yield return null;
